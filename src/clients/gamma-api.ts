@@ -41,6 +41,28 @@ import { PolymarketError } from '../core/errors.js';
 /** Gamma API base URL */
 const GAMMA_API_BASE = 'https://gamma-api.polymarket.com';
 
+const appendQueryParam = (
+  query: URLSearchParams,
+  key: string,
+  value:
+    | string
+    | number
+    | boolean
+    | Date
+    | Array<string | number | boolean | Date>
+    | undefined
+    | null
+) => {
+  if (value === undefined || value === null) return;
+  const normalize = (v: string | number | boolean | Date) =>
+    v instanceof Date ? v.toISOString() : String(v);
+  if (Array.isArray(value)) {
+    value.forEach((v) => query.append(key, normalize(v)));
+    return;
+  }
+  query.set(key, normalize(value));
+};
+
 // ===== Types =====
 
 /**
@@ -225,9 +247,14 @@ export interface GammaEvent {
  */
 export interface MarketSearchParams {
   /**
-   * Filter by market slug
+   * Filter by market slug (single or multiple)
    */
-  slug?: string;
+  slug?: string | string[];
+
+  /**
+   * Filter by Gamma market IDs
+   */
+  id?: Array<number | string>;
 
   /**
    * Filter by condition ID
@@ -235,7 +262,27 @@ export interface MarketSearchParams {
   conditionId?: string;
 
   /**
-   * Filter by active status
+   * Filter by condition IDs
+   */
+  conditionIds?: string[];
+
+  /**
+   * Filter by question IDs
+   */
+  questionIds?: string[];
+
+  /**
+   * Filter by CLOB token IDs
+   */
+  clobTokenIds?: string[];
+
+  /**
+   * Filter by market maker address
+   */
+  marketMakerAddress?: string[];
+
+  /**
+   * Filter by active status (Gamma extension)
    */
   active?: boolean;
 
@@ -243,6 +290,86 @@ export interface MarketSearchParams {
    * Filter by closed status
    */
   closed?: boolean;
+
+  /**
+   * Minimum liquidity (numeric)
+   */
+  liquidityNumMin?: number;
+
+  /**
+   * Maximum liquidity (numeric)
+   */
+  liquidityNumMax?: number;
+
+  /**
+   * Minimum volume (numeric)
+   */
+  volumeNumMin?: number;
+
+  /**
+   * Maximum volume (numeric)
+   */
+  volumeNumMax?: number;
+
+  /**
+   * Start date lower bound (ISO string or Date)
+   */
+  startDateMin?: string | Date;
+
+  /**
+   * Start date upper bound (ISO string or Date)
+   */
+  startDateMax?: string | Date;
+
+  /**
+   * End date lower bound (ISO string or Date)
+   */
+  endDateMin?: string | Date;
+
+  /**
+   * End date upper bound (ISO string or Date)
+   */
+  endDateMax?: string | Date;
+
+  /**
+   * Filter by tag ID
+   */
+  tagId?: number;
+
+  /**
+   * Include related tags
+   */
+  relatedTags?: boolean;
+
+  /**
+   * Filter by "create your own market" flag
+   */
+  cyom?: boolean;
+
+  /**
+   * Filter by UMA resolution status
+   */
+  umaResolutionStatus?: string;
+
+  /**
+   * Filter by sports game ID
+   */
+  gameId?: string;
+
+  /**
+   * Filter by sports market types
+   */
+  sportsMarketTypes?: string[];
+
+  /**
+   * Minimum rewards size
+   */
+  rewardsMinSize?: number;
+
+  /**
+   * Include tag metadata
+   */
+  includeTag?: boolean;
 
   /**
    * Maximum number of results (default: 100)
@@ -256,6 +383,141 @@ export interface MarketSearchParams {
 
   /**
    * Sort field (e.g., "volume24hr", "liquidity", "endDate")
+   */
+  order?: string;
+
+  /**
+   * Sort direction (true = ascending, false = descending)
+   */
+  ascending?: boolean;
+}
+
+/**
+ * Parameters for searching/filtering events
+ */
+export interface EventSearchParams {
+  /**
+   * Filter by event slug (single or multiple)
+   */
+  slug?: string | string[];
+
+  /**
+   * Filter by event IDs
+   */
+  id?: Array<number | string>;
+
+  /**
+   * Filter by tag ID
+   */
+  tagId?: number;
+
+  /**
+   * Exclude events with these tag IDs
+   */
+  excludeTagId?: Array<number | string>;
+
+  /**
+   * Filter by tag slug
+   */
+  tagSlug?: string;
+
+  /**
+   * Include related tags
+   */
+  relatedTags?: boolean;
+
+  /**
+   * Filter by active status
+   */
+  active?: boolean;
+
+  /**
+   * Filter by archived status
+   */
+  archived?: boolean;
+
+  /**
+   * Filter by featured status
+   */
+  featured?: boolean;
+
+  /**
+   * Filter by "create your own market" flag
+   */
+  cyom?: boolean;
+
+  /**
+   * Include chat data
+   */
+  includeChat?: boolean;
+
+  /**
+   * Include template data
+   */
+  includeTemplate?: boolean;
+
+  /**
+   * Filter by recurrence
+   */
+  recurrence?: string;
+
+  /**
+   * Filter by closed status
+   */
+  closed?: boolean;
+
+  /**
+   * Minimum liquidity (numeric)
+   */
+  liquidityMin?: number;
+
+  /**
+   * Maximum liquidity (numeric)
+   */
+  liquidityMax?: number;
+
+  /**
+   * Minimum volume (numeric)
+   */
+  volumeMin?: number;
+
+  /**
+   * Maximum volume (numeric)
+   */
+  volumeMax?: number;
+
+  /**
+   * Start date lower bound (ISO string or Date)
+   */
+  startDateMin?: string | Date;
+
+  /**
+   * Start date upper bound (ISO string or Date)
+   */
+  startDateMax?: string | Date;
+
+  /**
+   * End date lower bound (ISO string or Date)
+   */
+  endDateMin?: string | Date;
+
+  /**
+   * End date upper bound (ISO string or Date)
+   */
+  endDateMax?: string | Date;
+
+  /**
+   * Maximum number of results (default: 100)
+   */
+  limit?: number;
+
+  /**
+   * Offset for pagination
+   */
+  offset?: number;
+
+  /**
+   * Sort field (comma-separated list)
    */
   order?: string;
 
@@ -337,15 +599,35 @@ export class GammaApiClient {
    */
   async getMarkets(params?: MarketSearchParams): Promise<GammaMarket[]> {
     const query = new URLSearchParams();
-    if (params?.slug) query.set('slug', params.slug);
-    if (params?.conditionId) query.set('condition_id', params.conditionId);
-    if (params?.active !== undefined) query.set('active', String(params.active));
-    if (params?.closed !== undefined) query.set('closed', String(params.closed));
-    if (params?.limit) query.set('limit', String(params.limit));
-    if (params?.offset) query.set('offset', String(params.offset));
-    if (params?.order) query.set('order', params.order);
-    if (params?.ascending !== undefined)
-      query.set('ascending', String(params.ascending));
+    appendQueryParam(query, 'slug', params?.slug);
+    appendQueryParam(query, 'id', params?.id);
+    appendQueryParam(query, 'condition_id', params?.conditionId);
+    appendQueryParam(query, 'condition_ids', params?.conditionIds);
+    appendQueryParam(query, 'question_ids', params?.questionIds);
+    appendQueryParam(query, 'clob_token_ids', params?.clobTokenIds);
+    appendQueryParam(query, 'market_maker_address', params?.marketMakerAddress);
+    appendQueryParam(query, 'active', params?.active);
+    appendQueryParam(query, 'closed', params?.closed);
+    appendQueryParam(query, 'liquidity_num_min', params?.liquidityNumMin);
+    appendQueryParam(query, 'liquidity_num_max', params?.liquidityNumMax);
+    appendQueryParam(query, 'volume_num_min', params?.volumeNumMin);
+    appendQueryParam(query, 'volume_num_max', params?.volumeNumMax);
+    appendQueryParam(query, 'start_date_min', params?.startDateMin);
+    appendQueryParam(query, 'start_date_max', params?.startDateMax);
+    appendQueryParam(query, 'end_date_min', params?.endDateMin);
+    appendQueryParam(query, 'end_date_max', params?.endDateMax);
+    appendQueryParam(query, 'tag_id', params?.tagId);
+    appendQueryParam(query, 'related_tags', params?.relatedTags);
+    appendQueryParam(query, 'cyom', params?.cyom);
+    appendQueryParam(query, 'uma_resolution_status', params?.umaResolutionStatus);
+    appendQueryParam(query, 'game_id', params?.gameId);
+    appendQueryParam(query, 'sports_market_types', params?.sportsMarketTypes);
+    appendQueryParam(query, 'rewards_min_size', params?.rewardsMinSize);
+    appendQueryParam(query, 'include_tag', params?.includeTag);
+    appendQueryParam(query, 'limit', params?.limit);
+    appendQueryParam(query, 'offset', params?.offset);
+    appendQueryParam(query, 'order', params?.order);
+    appendQueryParam(query, 'ascending', params?.ascending);
 
     return this.rateLimiter.execute(ApiType.GAMMA_API, async () => {
       const response = await fetch(`${GAMMA_API_BASE}/markets?${query}`);
@@ -403,10 +685,7 @@ export class GammaApiClient {
   /**
    * Get events with optional filters
    *
-   * @param params - Filter parameters
-   * @param params.slug - Filter by event slug
-   * @param params.active - Filter by active status
-   * @param params.limit - Maximum results to return
+   * @param params - Filter parameters (see {@link EventSearchParams})
    * @returns Array of events matching the criteria
    *
    * @example
@@ -416,17 +695,39 @@ export class GammaApiClient {
    *
    * // Get a specific event by slug
    * const election = await client.getEvents({ slug: '2024-us-election' });
+   *
+   * // Filter by tag
+   * const politics = await client.getEvents({ tagId: 123, active: true, limit: 20 });
    * ```
    */
-  async getEvents(params?: {
-    slug?: string;
-    active?: boolean;
-    limit?: number;
-  }): Promise<GammaEvent[]> {
+  async getEvents(params?: EventSearchParams): Promise<GammaEvent[]> {
     const query = new URLSearchParams();
-    if (params?.slug) query.set('slug', params.slug);
-    if (params?.active !== undefined) query.set('active', String(params.active));
-    if (params?.limit) query.set('limit', String(params.limit));
+    appendQueryParam(query, 'slug', params?.slug);
+    appendQueryParam(query, 'id', params?.id);
+    appendQueryParam(query, 'tag_id', params?.tagId);
+    appendQueryParam(query, 'exclude_tag_id', params?.excludeTagId);
+    appendQueryParam(query, 'tag_slug', params?.tagSlug);
+    appendQueryParam(query, 'related_tags', params?.relatedTags);
+    appendQueryParam(query, 'active', params?.active);
+    appendQueryParam(query, 'archived', params?.archived);
+    appendQueryParam(query, 'featured', params?.featured);
+    appendQueryParam(query, 'cyom', params?.cyom);
+    appendQueryParam(query, 'include_chat', params?.includeChat);
+    appendQueryParam(query, 'include_template', params?.includeTemplate);
+    appendQueryParam(query, 'recurrence', params?.recurrence);
+    appendQueryParam(query, 'closed', params?.closed);
+    appendQueryParam(query, 'liquidity_min', params?.liquidityMin);
+    appendQueryParam(query, 'liquidity_max', params?.liquidityMax);
+    appendQueryParam(query, 'volume_min', params?.volumeMin);
+    appendQueryParam(query, 'volume_max', params?.volumeMax);
+    appendQueryParam(query, 'start_date_min', params?.startDateMin);
+    appendQueryParam(query, 'start_date_max', params?.startDateMax);
+    appendQueryParam(query, 'end_date_min', params?.endDateMin);
+    appendQueryParam(query, 'end_date_max', params?.endDateMax);
+    appendQueryParam(query, 'limit', params?.limit);
+    appendQueryParam(query, 'offset', params?.offset);
+    appendQueryParam(query, 'order', params?.order);
+    appendQueryParam(query, 'ascending', params?.ascending);
 
     return this.rateLimiter.execute(ApiType.GAMMA_API, async () => {
       const response = await fetch(`${GAMMA_API_BASE}/events?${query}`);
