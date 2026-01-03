@@ -172,6 +172,113 @@ export interface MarketResolution {
   payoutDenominator: number;
 }
 
+/**
+ * Generic binary market outcome configuration
+ * Allows any two mutually exclusive outcomes (not just YES/NO)
+ *
+ * @example
+ * ```typescript
+ * // Sports betting: Team A vs Team B
+ * const teamMarket: BinaryOutcomeConfig = {
+ *   outcome0: 'TEAM_A',
+ *   outcome1: 'TEAM_B'
+ * };
+ *
+ * // Election: Candidate A vs Candidate B
+ * const electionMarket: BinaryOutcomeConfig = {
+ *   outcome0: 'CANDIDATE_A',
+ *   outcome1: 'CANDIDATE_B'
+ * };
+ * ```
+ */
+export interface BinaryOutcomeConfig {
+  /** First outcome name (indexSet = 1) */
+  outcome0: string;
+  /** Second outcome name (indexSet = 2) */
+  outcome1: string;
+}
+
+/**
+ * Generic binary market resolution
+ * Works with any binary outcome configuration
+ */
+export interface GenericMarketResolution {
+  conditionId: string;
+  isResolved: boolean;
+  /** Index of winning outcome (0 or 1), undefined if not resolved */
+  winningOutcomeIndex?: 0 | 1;
+  /** Name of winning outcome (if outcomeConfig provided) */
+  winningOutcomeName?: string;
+  payoutNumerators: [number, number];
+  payoutDenominator: number;
+}
+
+/**
+ * Generic position balance for any binary market
+ */
+export interface GenericPositionBalance {
+  conditionId: string;
+  /** Balance of first outcome (indexSet = 1) */
+  balance0: string;
+  /** Balance of second outcome (indexSet = 2) */
+  balance1: string;
+  /** Token ID for first outcome */
+  tokenId0: string;
+  /** Token ID for second outcome */
+  tokenId1: string;
+  /** Optional outcome configuration for named access */
+  outcomeConfig?: BinaryOutcomeConfig;
+}
+
+/**
+ * Generic merge result for any binary market
+ */
+export interface GenericMergeResult {
+  success: boolean;
+  txHash: string;
+  amount: string;
+  usdcReceived: string;
+  gasUsed?: string;
+  outcomeConfig?: BinaryOutcomeConfig;
+}
+
+/**
+ * Generic redeem result for any binary market
+ */
+export interface GenericRedeemResult {
+  success: boolean;
+  txHash: string;
+  /** Index of redeemed outcome (0 or 1) */
+  outcomeIndex: 0 | 1;
+  /** Name of redeemed outcome (if outcomeConfig provided) */
+  outcomeName?: string;
+  tokensRedeemed: string;
+  usdcReceived: string;
+  gasUsed?: string;
+}
+
+/**
+ * Result of redeeming all positions in a binary market
+ */
+export interface RedeemAllResult {
+  success: boolean;
+  /** Transaction hashes for each redemption */
+  txHashes: string[];
+  /** Details of each outcome redeemed */
+  outcomes: Array<{
+    outcomeIndex: 0 | 1;
+    outcomeName?: string;
+    tokensRedeemed: string;
+    usdcReceived: string;
+    txHash: string;
+    gasUsed?: string;
+  }>;
+  /** Total USDC received from all redemptions */
+  totalUsdcReceived: string;
+  /** Total gas used across all transactions */
+  totalGasUsed?: string;
+}
+
 // ===== CTF Client =====
 
 // Default MATIC price (updated via getMaticPrice)
@@ -455,6 +562,92 @@ export class CTFClient {
   }
 
   /**
+   * Merge any binary token pair back into USDC
+   *
+   * ✅ USE THIS for generic binary markets (Team A vs B, Candidate X vs Y, etc.)
+   *
+   * This method works with any binary market configuration. It merges equal amounts
+   * of both outcome tokens back into USDC at a 1:1 ratio.
+   *
+   * @param conditionId - Market condition ID
+   * @param tokenId0 - Token ID for first outcome (indexSet = 1)
+   * @param tokenId1 - Token ID for second outcome (indexSet = 2)
+   * @param amount - Amount of token pairs to merge (e.g., "100" for 100 + 100 tokens)
+   * @param outcomeConfig - Optional outcome names for better error messages
+   * @returns GenericMergeResult with transaction details
+   *
+   * @example
+   * ```typescript
+   * // Sports betting: Merge Team A + Team B tokens to USDC
+   * const result = await ctf.mergeGenericPosition(
+   *   conditionId,
+   *   teamATokenId,
+   *   teamBTokenId,
+   *   "100",
+   *   { outcome0: 'TEAM_A', outcome1: 'TEAM_B' }
+   * );
+   * console.log(`Merged 100 pairs, received ${result.usdcReceived} USDC`);
+   *
+   * // Election: Merge Candidate A + Candidate B tokens
+   * const electionResult = await ctf.mergeGenericPosition(
+   *   conditionId,
+   *   candidateATokenId,
+   *   candidateBTokenId,
+   *   "50"
+   * );
+   * ```
+   */
+  async mergeGenericPosition(
+    conditionId: string,
+    tokenId0: string,
+    tokenId1: string,
+    amount: string,
+    outcomeConfig?: BinaryOutcomeConfig
+  ): Promise<GenericMergeResult> {
+    const amountWei = ethers.utils.parseUnits(amount, USDC_DECIMALS);
+
+    // Check token balances
+    const balances = await this.getGenericPositionBalance(
+      conditionId,
+      tokenId0,
+      tokenId1,
+      outcomeConfig
+    );
+    const balance0 = ethers.utils.parseUnits(balances.balance0, USDC_DECIMALS);
+    const balance1 = ethers.utils.parseUnits(balances.balance1, USDC_DECIMALS);
+
+    if (balance0.lt(amountWei) || balance1.lt(amountWei)) {
+      const outcome0Name = outcomeConfig?.outcome0 || 'Outcome0';
+      const outcome1Name = outcomeConfig?.outcome1 || 'Outcome1';
+      throw new Error(
+        `Insufficient token balance. Need ${amount} of each. ` +
+        `Have: ${outcome0Name}=${balances.balance0}, ${outcome1Name}=${balances.balance1}`
+      );
+    }
+
+    // Execute merge
+    const tx = await this.ctfContract.mergePositions(
+      USDC_CONTRACT,
+      ethers.constants.HashZero,
+      conditionId,
+      [1, 2],
+      amountWei,
+      await this.getGasOptions()
+    );
+
+    const receipt = await tx.wait();
+
+    return {
+      success: true,
+      txHash: receipt.transactionHash,
+      amount,
+      usdcReceived: amount, // 1:1 merge
+      gasUsed: receipt.gasUsed.toString(),
+      outcomeConfig,
+    };
+  }
+
+  /**
    * Redeem winning tokens after market resolution (Standard CTF)
    *
    * ⚠️ IMPORTANT: This method uses standard CTF position ID calculation.
@@ -611,6 +804,251 @@ export class CTFClient {
   }
 
   /**
+   * Redeem winning tokens from any binary market
+   *
+   * ✅ USE THIS for generic binary markets (Team A vs B, Candidate X vs Y, etc.)
+   *
+   * This method works with any binary market configuration. After a market is resolved,
+   * holders of winning outcome tokens can redeem them for USDC at a 1:1 ratio.
+   *
+   * @param conditionId - Market condition ID
+   * @param tokenId0 - Token ID for first outcome (indexSet = 1)
+   * @param tokenId1 - Token ID for second outcome (indexSet = 2)
+   * @param outcomeConfig - Optional outcome names for better error messages
+   * @param outcomeIndex - Optional: which outcome to redeem (0 or 1). Auto-detects if not provided.
+   * @returns GenericRedeemResult with transaction details
+   *
+   * @example
+   * ```typescript
+   * // Sports betting: Redeem winning Team A tokens
+   * const result = await ctf.redeemGenericPosition(
+   *   conditionId,
+   *   teamATokenId,
+   *   teamBTokenId,
+   *   { outcome0: 'TEAM_A', outcome1: 'TEAM_B' }
+   * );
+   * console.log(`Redeemed ${result.tokensRedeemed} ${result.outcomeName} tokens`);
+   * console.log(`Received ${result.usdcReceived} USDC`);
+   *
+   * // Election: Manually redeem Candidate B tokens (outcome index 1)
+   * const electionResult = await ctf.redeemGenericPosition(
+   *   conditionId,
+   *   candidateATokenId,
+   *   candidateBTokenId,
+   *   { outcome0: 'CANDIDATE_A', outcome1: 'CANDIDATE_B' },
+   *   1  // Redeem Candidate B
+   * );
+   * ```
+   */
+  async redeemGenericPosition(
+    conditionId: string,
+    tokenId0: string,
+    tokenId1: string,
+    outcomeConfig?: BinaryOutcomeConfig,
+    outcomeIndex?: 0 | 1
+  ): Promise<GenericRedeemResult> {
+    // Check resolution status
+    const resolution = await this.getGenericMarketResolution(conditionId, outcomeConfig);
+    if (!resolution.isResolved) {
+      throw new Error('Market is not resolved yet');
+    }
+
+    // Auto-detect outcome if not provided
+    const winningIndex = outcomeIndex !== undefined ? outcomeIndex : resolution.winningOutcomeIndex;
+    if (winningIndex === undefined) {
+      throw new Error('Could not determine winning outcome');
+    }
+
+    // Get token balance
+    const balances = await this.getGenericPositionBalance(
+      conditionId,
+      tokenId0,
+      tokenId1,
+      outcomeConfig
+    );
+    const tokenBalance = winningIndex === 0 ? balances.balance0 : balances.balance1;
+
+    if (parseFloat(tokenBalance) === 0) {
+      const outcomeName = outcomeConfig
+        ? (winningIndex === 0 ? outcomeConfig.outcome0 : outcomeConfig.outcome1)
+        : `Outcome${winningIndex}`;
+      throw new Error(`No ${outcomeName} tokens to redeem`);
+    }
+
+    // indexSets: [1] for outcome0, [2] for outcome1
+    const indexSets = winningIndex === 0 ? [1] : [2];
+
+    const tx = await this.ctfContract.redeemPositions(
+      USDC_CONTRACT,
+      ethers.constants.HashZero,
+      conditionId,
+      indexSets,
+      await this.getGasOptions()
+    );
+
+    const receipt = await tx.wait();
+
+    return {
+      success: true,
+      txHash: receipt.transactionHash,
+      outcomeIndex: winningIndex,
+      outcomeName: outcomeConfig
+        ? (winningIndex === 0 ? outcomeConfig.outcome0 : outcomeConfig.outcome1)
+        : undefined,
+      tokensRedeemed: tokenBalance,
+      usdcReceived: tokenBalance, // 1:1 for winning outcome
+      gasUsed: receipt.gasUsed.toString(),
+    };
+  }
+
+  /**
+   * Redeem ALL tokens (both outcome 0 and outcome 1) from a binary market
+   *
+   * ✅ USE THIS when you want to redeem all positions in one call
+   *
+   * This method is useful for:
+   * - Split resolutions where both outcomes have value
+   * - Markets where you hold both outcome tokens and want to redeem everything
+   * - Cleaning up positions after a market resolves
+   *
+   * The method will:
+   * 1. Check which outcomes have non-zero balances
+   * 2. Redeem each outcome with a balance (up to 2 transactions)
+   * 3. Return a summary of all redemptions and total USDC received
+   *
+   * @param conditionId - Market condition ID
+   * @param tokenId0 - Token ID for first outcome (indexSet = 1)
+   * @param tokenId1 - Token ID for second outcome (indexSet = 2)
+   * @param outcomeConfig - Optional outcome names for better reporting
+   * @returns RedeemAllResult with details of all redemptions
+   *
+   * @example
+   * ```typescript
+   * // Redeem all positions in a sports betting market
+   * const result = await ctf.redeemAllGenericPositions(
+   *   conditionId,
+   *   teamATokenId,
+   *   teamBTokenId,
+   *   { outcome0: 'TEAM_A', outcome1: 'TEAM_B' }
+   * );
+   *
+   * console.log(`Total USDC received: ${result.totalUsdcReceived}`);
+   * console.log(`Redemptions made: ${result.outcomes.length}`);
+   * result.outcomes.forEach(outcome => {
+   *   console.log(`- ${outcome.outcomeName}: ${outcome.tokensRedeemed} tokens → ${outcome.usdcReceived} USDC`);
+   * });
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Redeem all positions without outcome names
+   * const result = await ctf.redeemAllGenericPositions(
+   *   conditionId,
+   *   tokenId0,
+   *   tokenId1
+   * );
+   * console.log(`Total USDC: ${result.totalUsdcReceived}`);
+   * ```
+   */
+  async redeemAllGenericPositions(
+    conditionId: string,
+    tokenId0: string,
+    tokenId1: string,
+    outcomeConfig?: BinaryOutcomeConfig
+  ): Promise<RedeemAllResult> {
+    // Check resolution status
+    const resolution = await this.getGenericMarketResolution(conditionId, outcomeConfig);
+    if (!resolution.isResolved) {
+      throw new Error('Market is not resolved yet');
+    }
+
+    // Get token balances
+    const balances = await this.getGenericPositionBalance(
+      conditionId,
+      tokenId0,
+      tokenId1,
+      outcomeConfig
+    );
+
+    const balance0 = parseFloat(balances.balance0);
+    const balance1 = parseFloat(balances.balance1);
+
+    // Check if there are any tokens to redeem
+    if (balance0 === 0 && balance1 === 0) {
+      throw new Error('No tokens to redeem for either outcome');
+    }
+
+    const outcomes: RedeemAllResult['outcomes'] = [];
+    const txHashes: string[] = [];
+    let totalUsdcReceived = 0;
+    let totalGasUsed = BigNumber.from(0);
+
+    // Redeem outcome 0 if there's a balance
+    if (balance0 > 0) {
+      const tx0 = await this.ctfContract.redeemPositions(
+        USDC_CONTRACT,
+        ethers.constants.HashZero,
+        conditionId,
+        [1], // indexSet for outcome 0
+        await this.getGasOptions()
+      );
+      const receipt0 = await tx0.wait();
+
+      const outcome0Name = outcomeConfig?.outcome0;
+      const usdcReceived0 = balances.balance0;
+
+      outcomes.push({
+        outcomeIndex: 0,
+        outcomeName: outcome0Name,
+        tokensRedeemed: balances.balance0,
+        usdcReceived: usdcReceived0,
+        txHash: receipt0.transactionHash,
+        gasUsed: receipt0.gasUsed.toString(),
+      });
+
+      txHashes.push(receipt0.transactionHash);
+      totalUsdcReceived += parseFloat(usdcReceived0);
+      totalGasUsed = totalGasUsed.add(receipt0.gasUsed);
+    }
+
+    // Redeem outcome 1 if there's a balance
+    if (balance1 > 0) {
+      const tx1 = await this.ctfContract.redeemPositions(
+        USDC_CONTRACT,
+        ethers.constants.HashZero,
+        conditionId,
+        [2], // indexSet for outcome 1
+        await this.getGasOptions()
+      );
+      const receipt1 = await tx1.wait();
+
+      const outcome1Name = outcomeConfig?.outcome1;
+      const usdcReceived1 = balances.balance1;
+
+      outcomes.push({
+        outcomeIndex: 1,
+        outcomeName: outcome1Name,
+        tokensRedeemed: balances.balance1,
+        usdcReceived: usdcReceived1,
+        txHash: receipt1.transactionHash,
+        gasUsed: receipt1.gasUsed.toString(),
+      });
+
+      txHashes.push(receipt1.transactionHash);
+      totalUsdcReceived += parseFloat(usdcReceived1);
+      totalGasUsed = totalGasUsed.add(receipt1.gasUsed);
+    }
+
+    return {
+      success: true,
+      txHashes,
+      outcomes,
+      totalUsdcReceived: totalUsdcReceived.toFixed(6),
+      totalGasUsed: totalGasUsed.toString(),
+    };
+  }
+
+  /**
    * Get token balances for a market using calculated position IDs
    *
    * NOTE: This method calculates position IDs from conditionId, which may not match
@@ -682,6 +1120,61 @@ export class CTFClient {
   }
 
   /**
+   * Get token balances for any binary market using token IDs
+   *
+   * ✅ USE THIS for generic binary markets (Team A vs B, Candidate X vs Y, etc.)
+   *
+   * This method works with any binary market configuration, not just YES/NO markets.
+   * Token IDs should be obtained from the CLOB API.
+   *
+   * @param conditionId - Market condition ID
+   * @param tokenId0 - Token ID for first outcome (indexSet = 1)
+   * @param tokenId1 - Token ID for second outcome (indexSet = 2)
+   * @param outcomeConfig - Optional outcome names for better readability
+   * @returns GenericPositionBalance with balances for both outcomes
+   *
+   * @example
+   * ```typescript
+   * // Sports betting: Team A vs Team B
+   * const balance = await ctf.getGenericPositionBalance(
+   *   conditionId,
+   *   teamATokenId,
+   *   teamBTokenId,
+   *   { outcome0: 'TEAM_A', outcome1: 'TEAM_B' }
+   * );
+   * console.log(`Team A: ${balance.balance0}, Team B: ${balance.balance1}`);
+   *
+   * // Election: Candidate A vs Candidate B
+   * const electionBalance = await ctf.getGenericPositionBalance(
+   *   conditionId,
+   *   candidateATokenId,
+   *   candidateBTokenId,
+   *   { outcome0: 'CANDIDATE_A', outcome1: 'CANDIDATE_B' }
+   * );
+   * ```
+   */
+  async getGenericPositionBalance(
+    conditionId: string,
+    tokenId0: string,
+    tokenId1: string,
+    outcomeConfig?: BinaryOutcomeConfig
+  ): Promise<GenericPositionBalance> {
+    const [balance0, balance1] = await Promise.all([
+      this.ctfContract.balanceOf(this.wallet.address, tokenId0),
+      this.ctfContract.balanceOf(this.wallet.address, tokenId1),
+    ]);
+
+    return {
+      conditionId,
+      balance0: ethers.utils.formatUnits(balance0, USDC_DECIMALS),
+      balance1: ethers.utils.formatUnits(balance1, USDC_DECIMALS),
+      tokenId0,
+      tokenId1,
+      outcomeConfig,
+    };
+  }
+
+  /**
    * Check if a market is resolved and get payout info
    */
   async getMarketResolution(conditionId: string): Promise<MarketResolution> {
@@ -708,6 +1201,72 @@ export class CTFClient {
       isResolved,
       winningOutcome,
       payoutNumerators: [yesNumerator.toNumber(), noNumerator.toNumber()],
+      payoutDenominator: denominator.toNumber(),
+    };
+  }
+
+  /**
+   * Check if any binary market is resolved and get payout info
+   *
+   * ✅ USE THIS for generic binary markets (Team A vs B, Candidate X vs Y, etc.)
+   *
+   * Works with any binary market configuration. Provides both index-based and
+   * name-based outcome information.
+   *
+   * @param conditionId - Market condition ID
+   * @param outcomeConfig - Optional outcome names for better readability
+   * @returns GenericMarketResolution with resolution status and winning outcome
+   *
+   * @example
+   * ```typescript
+   * // Sports betting: Team A vs Team B
+   * const resolution = await ctf.getGenericMarketResolution(
+   *   conditionId,
+   *   { outcome0: 'TEAM_A', outcome1: 'TEAM_B' }
+   * );
+   * if (resolution.isResolved) {
+   *   console.log(`Winner: ${resolution.winningOutcomeName}`); // "TEAM_A" or "TEAM_B"
+   *   console.log(`Winning index: ${resolution.winningOutcomeIndex}`); // 0 or 1
+   * }
+   *
+   * // Without outcome config (index-based only)
+   * const resolution2 = await ctf.getGenericMarketResolution(conditionId);
+   * if (resolution2.isResolved) {
+   *   console.log(`Winning index: ${resolution2.winningOutcomeIndex}`); // 0 or 1
+   * }
+   * ```
+   */
+  async getGenericMarketResolution(
+    conditionId: string,
+    outcomeConfig?: BinaryOutcomeConfig
+  ): Promise<GenericMarketResolution> {
+    const [numerator0, numerator1, denominator] = await Promise.all([
+      this.ctfContract.payoutNumerators(conditionId, 0),
+      this.ctfContract.payoutNumerators(conditionId, 1),
+      this.ctfContract.payoutDenominator(conditionId),
+    ]);
+
+    const isResolved = denominator.gt(0);
+    let winningOutcomeIndex: 0 | 1 | undefined;
+    let winningOutcomeName: string | undefined;
+
+    if (isResolved) {
+      if (numerator0.gt(0) && numerator1.eq(0)) {
+        winningOutcomeIndex = 0;
+        winningOutcomeName = outcomeConfig?.outcome0;
+      } else if (numerator1.gt(0) && numerator0.eq(0)) {
+        winningOutcomeIndex = 1;
+        winningOutcomeName = outcomeConfig?.outcome1;
+      }
+      // If both are non-zero, it's a split resolution (rare, no clear winner)
+    }
+
+    return {
+      conditionId,
+      isResolved,
+      winningOutcomeIndex,
+      winningOutcomeName,
+      payoutNumerators: [numerator0.toNumber(), numerator1.toNumber()],
       payoutDenominator: denominator.toNumber(),
     };
   }
