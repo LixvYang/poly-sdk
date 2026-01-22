@@ -141,6 +141,12 @@ export interface DipArbServiceConfig {
   debug?: boolean;
 
   /**
+   * 是否在 start() 时自动连接 WebSocket
+   * 默认: false（需要手动连接）
+   */
+  realtimeEnabled?: boolean;
+
+  /**
    * 自定义日志处理函数
    * 如果设置，所有日志将通过此函数输出
    * @example
@@ -179,6 +185,7 @@ export const DEFAULT_DIP_ARB_CONFIG: DipArbConfigInternal = {
   splitOrders: 1,         // ✅ 默认不拆分，避免份额误差
   orderIntervalMs: 500,   // 拆分订单间隔 500ms
   debug: false,
+  realtimeEnabled: false,
 };
 
 // ============= Market Configuration =============

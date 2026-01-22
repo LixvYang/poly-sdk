@@ -16,7 +16,10 @@
  *
  * 使用示例：
  * ```typescript
- * const sdk = await PolymarketSDK.create({ privateKey: '...' });
+ * const sdk = await PolymarketSDK.create({
+ *   privateKey: '...',
+ *   realtime: { enabled: true },
+ * });
  *
  * // 自动找到并启动
  * await sdk.dipArb.findAndStart({ coin: 'BTC' });
@@ -322,29 +325,35 @@ export class DipArbService extends EventEmitter {
       this.log('No wallet configured - monitoring only');
     }
 
-    // Connect realtime service and wait for connection
-    this.realtimeService.connect();
+    // Connect realtime service and wait for connection (if enabled)
+    if (!this.realtimeService.isConnected?.()) {
+      if (this.config.realtimeEnabled) {
+        this.realtimeService.connect();
 
-    // Wait for WebSocket connection (with timeout)
-    await new Promise<void>((resolve) => {
-      const timeout = setTimeout(() => {
-        this.log('Warning: WebSocket connection timeout, proceeding anyway');
-        resolve();
-      }, 10000);
+        // Wait for WebSocket connection (with timeout)
+        await new Promise<void>((resolve) => {
+          const timeout = setTimeout(() => {
+            this.log('Warning: WebSocket connection timeout, proceeding anyway');
+            resolve();
+          }, 10000);
 
-      // Check if already connected
-      if (this.realtimeService.isConnected?.()) {
-        clearTimeout(timeout);
-        resolve();
-        return;
+          // Check if already connected
+          if (this.realtimeService.isConnected?.()) {
+            clearTimeout(timeout);
+            resolve();
+            return;
+          }
+
+          this.realtimeService.once('connected', () => {
+            clearTimeout(timeout);
+            this.log('WebSocket connected');
+            resolve();
+          });
+        });
+      } else {
+        throw new Error('Realtime is disabled. Set realtimeEnabled: true or connect manually before start().');
       }
-
-      this.realtimeService.once('connected', () => {
-        clearTimeout(timeout);
-        this.log('WebSocket connected');
-        resolve();
-      });
-    });
+    }
 
     // Subscribe to market orderbook
     this.log(`Subscribing to tokens: UP=${market.upTokenId.slice(0, 20)}..., DOWN=${market.downTokenId.slice(0, 20)}...`);

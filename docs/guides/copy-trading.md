@@ -963,7 +963,10 @@ Copy Trading 是否有价值？
 import { PolymarketSDK } from '@catalyst-team/poly-sdk';
 
 // 一行代码启动 SDK（推荐）
-const sdk = await PolymarketSDK.create({ privateKey: '0x...' });
+const sdk = await PolymarketSDK.create({
+  privateKey: '0x...',
+  realtime: { enabled: true }, // 需要实时 WebSocket
+});
 // SDK 已初始化并连接 WebSocket
 
 // ===== 自动跟单交易 =====

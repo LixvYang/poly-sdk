@@ -399,6 +399,7 @@ export class PolymarketSDK {
   // Infrastructure
   private rateLimiter: RateLimiter;
   private cache: UnifiedCache;
+  private readonly realtimeAutoConnect: boolean;
 
   // API Clients
   public readonly dataApi: DataApiClient;
@@ -420,6 +421,7 @@ export class PolymarketSDK {
   constructor(config: PolymarketSDKConfig = {}) {
     // Initialize infrastructure
     this.rateLimiter = new RateLimiter();
+    this.realtimeAutoConnect = config.realtime?.enabled ?? false;
 
     // Create unified cache (supports both legacy Cache and CacheAdapter)
     this.cache = createUnifiedCache(config.cache);
@@ -468,8 +470,11 @@ export class PolymarketSDK {
    *
    * @example
    * ```typescript
-   * const sdk = await PolymarketSDK.create({ privateKey: '...' });
-   * // Ready to trade and track smart money
+   * const sdk = await PolymarketSDK.create({
+   *   privateKey: '...',
+   *   realtime: { enabled: true }, // required for smart money tracking
+   * });
+   * // Ready to trade (and WebSocket connected if enabled)
    * ```
    */
   static async create(config: PolymarketSDKConfig = {}): Promise<PolymarketSDK> {
@@ -497,24 +502,27 @@ export class PolymarketSDK {
   }
 
   /**
-   * Start SDK - initialize trading + connect WebSocket
+   * Start SDK - initialize trading and optionally connect WebSocket
    *
    * One method to do everything:
    * - Initialize trading service (derive API credentials)
-   * - Connect WebSocket
-   * - Wait for connection
+   * - Optionally connect WebSocket (when enabled)
+   * - Wait for connection if connected
    *
    * @example
    * ```typescript
    * const sdk = new PolymarketSDK({ privateKey: '...' });
-   * await sdk.start();
+   * await sdk.start({ connectRealtime: true });
    * // Ready to use
    * ```
    */
-  async start(options: { timeout?: number } = {}): Promise<void> {
+  async start(options: { timeout?: number; connectRealtime?: boolean } = {}): Promise<void> {
     await this.initialize();
-    this.connect();
-    await this.waitForConnection(options.timeout ?? 10000);
+    const shouldConnect = options.connectRealtime ?? this.realtimeAutoConnect;
+    if (shouldConnect) {
+      this.connect();
+      await this.waitForConnection(options.timeout ?? 10000);
+    }
   }
 
   /**

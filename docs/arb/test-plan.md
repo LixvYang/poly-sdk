@@ -151,7 +151,7 @@ imbalance = 15 > threshold(5)
 
 #### Test 2.1: Market Scanning
 ```typescript
-const service = new ArbitrageService({ enableLogging: true });
+const service = new ArbitrageService({ enableLogging: true, realtimeEnabled: true });
 
 const results = await service.scanMarkets({
   minVolume24h: 5000,
@@ -167,7 +167,7 @@ const results = await service.scanMarkets({
 
 #### Test 2.2: WebSocket Monitoring
 ```typescript
-const service = new ArbitrageService({ enableLogging: true });
+const service = new ArbitrageService({ enableLogging: true, realtimeEnabled: true });
 
 // Find a market to monitor
 const results = await service.quickScan(0, 1);
@@ -207,6 +207,7 @@ const opportunity = service.checkOpportunity();
 const service = new ArbitrageService({
   privateKey: process.env.PRIVATE_KEY,
   enableLogging: true,
+  realtimeEnabled: true,
 });
 
 // Find a market
@@ -276,6 +277,7 @@ const buyResult = await tradingClient.createMarketOrder({
 const service = new ArbitrageService({
   privateKey: process.env.PRIVATE_KEY,
   enableRebalancer: true,
+  realtimeEnabled: true,
   minUsdcRatio: 0.2,
   maxUsdcRatio: 0.8,
   targetUsdcRatio: 0.5,

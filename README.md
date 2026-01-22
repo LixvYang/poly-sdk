@@ -202,8 +202,9 @@ import { PolymarketSDK } from '@catalyst-team/poly-sdk';
 // Recommended: Use static factory method (one line to get started)
 const sdk = await PolymarketSDK.create({
   privateKey: process.env.POLYMARKET_PRIVATE_KEY!,
+  realtime: { enabled: true }, // Optional: connect WebSocket
 });
-// Ready to trade - SDK is initialized and WebSocket connected
+// Ready to trade - SDK is initialized (WebSocket connected if enabled)
 
 // Place a limit order
 const order = await sdk.tradingService.createLimitOrder({
@@ -235,20 +236,21 @@ The main SDK class that integrates all services.
 import { PolymarketSDK } from '@catalyst-team/poly-sdk';
 
 // ===== Method 1: Static Factory (Recommended) =====
-// One line: new + initialize + connect + waitForConnection
+// One line: new + initialize (+ optional WebSocket connect)
 const sdk = await PolymarketSDK.create({
   privateKey: '0x...', // Optional: for trading
   chainId: 137,        // Optional: Polygon mainnet (default)
+  realtime: { enabled: true }, // Optional: auto-connect WebSocket
 });
 
 // ===== Method 2: Using start() =====
 // const sdk = new PolymarketSDK({ privateKey: '0x...' });
-// await sdk.start();  // initialize + connect + waitForConnection
+// await sdk.start();  // initialize (+ optional WebSocket connect)
 
 // ===== Method 3: Manual Step-by-Step (Full Control) =====
 // const sdk = new PolymarketSDK({ privateKey: '0x...' });
 // await sdk.initialize();       // Initialize trading service
-// sdk.connect();                // Connect WebSocket
+// sdk.connect();                // Connect WebSocket (manual)
 // await sdk.waitForConnection(); // Wait for connection
 
 // Access services
@@ -529,7 +531,10 @@ Smart money detection and **real-time auto copy trading**.
 import { PolymarketSDK } from '@catalyst-team/poly-sdk';
 
 // One line to get started (recommended)
-const sdk = await PolymarketSDK.create({ privateKey: '0x...' });
+const sdk = await PolymarketSDK.create({
+  privateKey: '0x...',
+  realtime: { enabled: true }, // Required for smart money tracking
+});
 // SDK is initialized and WebSocket connected
 
 // Get smart money wallets
@@ -603,6 +608,7 @@ import { ArbitrageService } from '@catalyst-team/poly-sdk';
 
 const arbService = new ArbitrageService({
   privateKey: process.env.POLY_PRIVKEY,
+  realtimeEnabled: true,  // auto-connect WebSocket
   profitThreshold: 0.005,  // 0.5% minimum profit
   minTradeSize: 5,         // $5 minimum
   maxTradeSize: 100,       // $100 maximum
@@ -679,6 +685,7 @@ PRIVATE_KEY=0x... npx tsx scripts/dip-arb/auto-trade.ts
 import { PolymarketSDK } from '@catalyst-team/poly-sdk';
 
 const sdk = new PolymarketSDK({ privateKey: '0x...' });
+await sdk.start({ connectRealtime: true });
 
 // Configure strategy
 sdk.dipArb.updateConfig({

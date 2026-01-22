@@ -63,7 +63,7 @@ describe('ArbitrageService Integration', () => {
 
   describe('Market Scanning', () => {
     it('should scan markets for arbitrage opportunities', async () => {
-      service = new ArbitrageService({ enableLogging: false });
+      service = new ArbitrageService({ enableLogging: false, realtimeEnabled: true });
 
       const results = await service.scanMarkets({
         minVolume24h: 1000,
@@ -100,7 +100,7 @@ describe('ArbitrageService Integration', () => {
     }, 120000);
 
     it('should filter markets by keywords', async () => {
-      service = new ArbitrageService({ enableLogging: false });
+      service = new ArbitrageService({ enableLogging: false, realtimeEnabled: true });
 
       const results = await service.scanMarkets({
         minVolume24h: 100,
@@ -115,7 +115,7 @@ describe('ArbitrageService Integration', () => {
     }, 120000);
 
     it('should quick scan for best opportunities', async () => {
-      service = new ArbitrageService({ enableLogging: false });
+      service = new ArbitrageService({ enableLogging: false, realtimeEnabled: true });
 
       const results = await service.quickScan(0.001, 5);
 
@@ -137,7 +137,7 @@ describe('ArbitrageService Integration', () => {
 
   describe('Opportunity Detection', () => {
     it('should start monitoring and receive orderbook updates', async () => {
-      service = new ArbitrageService({ enableLogging: false });
+      service = new ArbitrageService({ enableLogging: false, realtimeEnabled: true });
 
       // Start monitoring
       await service.start(testMarket);
@@ -174,6 +174,7 @@ describe('ArbitrageService Integration', () => {
     it('should check for arbitrage opportunities', async () => {
       service = new ArbitrageService({
         enableLogging: false,
+        realtimeEnabled: true,
         profitThreshold: 0.001, // Very low threshold to detect opportunities
       });
 
@@ -223,6 +224,7 @@ describe('ArbitrageService Integration', () => {
     it('should emit opportunity events', async () => {
       service = new ArbitrageService({
         enableLogging: false,
+        realtimeEnabled: true,
         profitThreshold: 0, // Zero threshold to catch any opportunity
       });
 
@@ -259,7 +261,7 @@ describe('ArbitrageService Integration', () => {
 
   describe('Service State', () => {
     it('should track statistics', async () => {
-      service = new ArbitrageService({ enableLogging: false });
+      service = new ArbitrageService({ enableLogging: false, realtimeEnabled: true });
 
       const stats = service.getStats();
 
@@ -276,7 +278,7 @@ describe('ArbitrageService Integration', () => {
     });
 
     it('should start and stop cleanly', async () => {
-      service = new ArbitrageService({ enableLogging: false });
+      service = new ArbitrageService({ enableLogging: false, realtimeEnabled: true });
 
       // Track events
       let startedEmitted = false;
@@ -297,7 +299,7 @@ describe('ArbitrageService Integration', () => {
     }, 30000);
 
     it('should prevent double-start', async () => {
-      service = new ArbitrageService({ enableLogging: false });
+      service = new ArbitrageService({ enableLogging: false, realtimeEnabled: true });
 
       await service.start(testMarket);
 
@@ -312,6 +314,7 @@ describe('ArbitrageService Integration', () => {
     it('should calculate rebalance actions (without wallet)', () => {
       service = new ArbitrageService({
         enableLogging: false,
+        realtimeEnabled: true,
         enableRebalancer: true,
         minUsdcRatio: 0.2,
         maxUsdcRatio: 0.8,

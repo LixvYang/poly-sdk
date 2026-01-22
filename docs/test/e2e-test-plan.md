@@ -467,7 +467,7 @@ describe('ArbitrageService Integration', () => {
 
   describe('Architecture', () => {
     it('should use RealtimeServiceV2 internally', () => {
-      service = new ArbitrageService({ enableLogging: false });
+      service = new ArbitrageService({ enableLogging: false, realtimeEnabled: true });
 
       // The service should create RealtimeServiceV2 in constructor
       // This is verified by the fact that start() works with WebSocket
@@ -477,7 +477,7 @@ describe('ArbitrageService Integration', () => {
 
   describe('Orderbook Subscription', () => {
     it('should receive orderbook updates via handleBookUpdate', async () => {
-      service = new ArbitrageService({ enableLogging: false });
+      service = new ArbitrageService({ enableLogging: false, realtimeEnabled: true });
 
       const orderbookPromise = new Promise<OrderbookState>((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error('Timeout')), 30000);
@@ -502,7 +502,7 @@ describe('ArbitrageService Integration', () => {
     }, 35000);
 
     it('should emit started event on start', async () => {
-      service = new ArbitrageService({ enableLogging: false });
+      service = new ArbitrageService({ enableLogging: false, realtimeEnabled: true });
 
       const startedPromise = new Promise<ArbitrageMarketConfig>((resolve) => {
         service.on('started', resolve);
@@ -515,7 +515,7 @@ describe('ArbitrageService Integration', () => {
     }, 10000);
 
     it('should emit stopped event on stop', async () => {
-      service = new ArbitrageService({ enableLogging: false });
+      service = new ArbitrageService({ enableLogging: false, realtimeEnabled: true });
 
       await service.start(testMarket);
 
@@ -537,6 +537,7 @@ describe('ArbitrageService Integration', () => {
     it('should check for opportunities when orderbook updates', async () => {
       service = new ArbitrageService({
         enableLogging: false,
+        realtimeEnabled: true,
         profitThreshold: 0.001, // Low threshold for testing
       });
 

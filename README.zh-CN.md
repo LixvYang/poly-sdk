@@ -194,8 +194,9 @@ import { PolymarketSDK } from '@catalyst-team/poly-sdk';
 // 推荐: 使用静态工厂方法（一行代码启动）
 const sdk = await PolymarketSDK.create({
   privateKey: process.env.POLYMARKET_PRIVATE_KEY!,
+  realtime: { enabled: true }, // 可选：自动连接 WebSocket
 });
-// 准备好交易 - SDK 已初始化并连接 WebSocket
+// 准备好交易 - SDK 已初始化（如启用则连接 WebSocket）
 
 // 下限价单
 const order = await sdk.tradingService.createLimitOrder({
@@ -227,20 +228,21 @@ sdk.stop();
 import { PolymarketSDK } from '@catalyst-team/poly-sdk';
 
 // ===== 方式 1: 静态工厂方法（推荐）=====
-// 一行搞定: new + initialize + connect + waitForConnection
+// 一行搞定: new + initialize（可选 WebSocket 连接）
 const sdk = await PolymarketSDK.create({
   privateKey: '0x...', // 可选: 用于交易
   chainId: 137,        // 可选: Polygon 主网（默认）
+  realtime: { enabled: true }, // 可选：自动连接 WebSocket
 });
 
 // ===== 方式 2: 使用 start() =====
 // const sdk = new PolymarketSDK({ privateKey: '0x...' });
-// await sdk.start();  // initialize + connect + waitForConnection
+// await sdk.start();  // initialize（可选 WebSocket 连接）
 
 // ===== 方式 3: 手动分步（完全控制）=====
 // const sdk = new PolymarketSDK({ privateKey: '0x...' });
 // await sdk.initialize();       // 初始化交易服务
-// sdk.connect();                // 连接 WebSocket
+// sdk.connect();                // 连接 WebSocket（手动）
 // await sdk.waitForConnection(); // 等待连接完成
 
 // 访问服务
@@ -520,7 +522,10 @@ const groupSell = await sdk.wallets.trackGroupSellRatio(
 import { PolymarketSDK } from '@catalyst-team/poly-sdk';
 
 // 一行代码启动（推荐）
-const sdk = await PolymarketSDK.create({ privateKey: '0x...' });
+const sdk = await PolymarketSDK.create({
+  privateKey: '0x...',
+  realtime: { enabled: true }, // 聪明钱跟踪需要 WebSocket
+});
 
 // ===== 自动跟单交易 =====
 // 实时跟单 - 聪明钱一旦交易，立即跟单
@@ -582,6 +587,7 @@ import { ArbitrageService } from '@catalyst-team/poly-sdk';
 
 const arbService = new ArbitrageService({
   privateKey: process.env.POLY_PRIVKEY,
+  realtimeEnabled: true,  // 自动连接 WebSocket
   profitThreshold: 0.005,  // 最小 0.5% 利润
   minTradeSize: 5,         // 最小 $5
   maxTradeSize: 100,       // 最大 $100

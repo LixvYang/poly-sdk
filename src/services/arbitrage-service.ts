@@ -88,6 +88,11 @@ export interface ArbitrageServiceConfig {
   sizeSafetyFactor?: number;
   /** Auto-fix imbalance after failed execution (default: true) */
   autoFixImbalance?: boolean;
+  /**
+   * Auto-connect WebSocket when calling start()
+   * Default: false (explicit connect required)
+   */
+  realtimeEnabled?: boolean;
 }
 
 export interface RebalanceAction {
@@ -315,6 +320,7 @@ export class ArbitrageService extends EventEmitter {
       // Execution safety
       sizeSafetyFactor: config.sizeSafetyFactor ?? 0.8,
       autoFixImbalance: config.autoFixImbalance ?? true,
+      realtimeEnabled: config.realtimeEnabled ?? false,
     };
 
     this.rateLimiter = new RateLimiter();
@@ -385,8 +391,14 @@ export class ArbitrageService extends EventEmitter {
       this.log('No wallet configured - monitoring only');
     }
 
-    // Connect and subscribe to WebSocket
-    this.realtimeService.connect();
+    // Connect and subscribe to WebSocket (if enabled)
+    if (!this.realtimeService.isConnected?.()) {
+      if (this.config.realtimeEnabled) {
+        this.realtimeService.connect();
+      } else {
+        throw new Error('Realtime is disabled. Set realtimeEnabled: true or connect manually before start().');
+      }
+    }
     this.marketSubscription = this.realtimeService.subscribeMarkets(
       [market.yesTokenId, market.noTokenId],
       {
@@ -897,7 +909,7 @@ export class ArbitrageService extends EventEmitter {
    *
    * @example
    * ```typescript
-   * const service = new ArbitrageService({ privateKey: '0x...' });
+   * const service = new ArbitrageService({ privateKey: '0x...', realtimeEnabled: true });
    *
    * // View clearing plan
    * const plan = await service.clearPositions(market, false);
@@ -1603,7 +1615,7 @@ export class ArbitrageService extends EventEmitter {
    *
    * @example
    * ```typescript
-   * const service = new ArbitrageService({ privateKey: '0x...' });
+   * const service = new ArbitrageService({ privateKey: '0x...', realtimeEnabled: true });
    *
    * // Scan markets with at least $5000 volume
    * const results = await service.scanMarkets({ minVolume24h: 5000 }, 0.005);
@@ -1774,7 +1786,7 @@ export class ArbitrageService extends EventEmitter {
    *
    * @example
    * ```typescript
-   * const service = new ArbitrageService({ privateKey: '0x...' });
+   * const service = new ArbitrageService({ privateKey: '0x...', realtimeEnabled: true });
    *
    * // Find best arbitrage opportunities
    * const top = await service.quickScan(0.005, 5);
@@ -1812,6 +1824,7 @@ export class ArbitrageService extends EventEmitter {
    * ```typescript
    * const service = new ArbitrageService({
    *   privateKey: '0x...',
+   *   realtimeEnabled: true,
    *   autoExecute: true,
    *   profitThreshold: 0.005,
    * });

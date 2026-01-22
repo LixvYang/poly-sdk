@@ -119,6 +119,18 @@ export interface PolySDKOptions {
     secret: string;
     passphrase: string;
   };
+
+  /**
+   * Realtime WebSocket configuration.
+   * Controls whether sdk.start()/create() auto-connects.
+   */
+  realtime?: {
+    /**
+     * Auto-connect WebSocket when calling sdk.start()/create().
+     * Default: false (explicit connect required).
+     */
+    enabled?: boolean;
+  };
 }
 
 // K-Line interval types

@@ -40,6 +40,7 @@ async function main() {
   // ========== Initialize ArbitrageService ==========
   const arbService = new ArbitrageService({
     privateKey: SCAN_ONLY ? undefined : privateKey,
+    realtimeEnabled: true,
     profitThreshold: 0.005,  // 0.5% minimum profit
     minTradeSize: 5,         // $5 minimum
     maxTradeSize: 100,       // $100 maximum
